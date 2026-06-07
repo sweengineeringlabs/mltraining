@@ -19,51 +19,60 @@
 ## Component Diagram
 
 ```
-mltraining
-├── lib.rs                        (umbrella facade — re-exports mlautograd, mllayers, mloptim)
+mltraining  (SEA: api / core / saf)
 │
-├── loss.rs                       [Loss trait]
-│   └── forward(&Tensor, &Tensor) -> MlResult<Tensor>
+├── lib.rs                        (declares api, core as private; re-exports saf::*)
 │
-├── dataset.rs                    [Dataset trait]
-│   └── len() / get(i) / input_shape() / target_dim()
+├── saf/
+│   └── mod.rs                    (sole public re-export surface)
+│       ├── own types  → Loss, Dataset, MSELoss, MAELoss, HuberLoss,
+│       │                  CrossEntropyLoss, QuantileLoss, DataLoader,
+│       │                  Scaler, ScalerType, Trainer, Metrics,
+│       │                  model_summary, Checkpoint, SavedParam,
+│       │                  save_checkpoint, load_checkpoint
+│       └── umbrella   → mlautograd, mllayers, mloptim (full public surface)
 │
-├── lossfunction/
-│   ├── mse_loss.rs   → MSELoss
-│   ├── mae_loss.rs   → MAELoss
-│   ├── huber.rs      → HuberLoss         (delta as field)
-│   ├── cross_entropy.rs → CrossEntropyLoss
-│   └── quantile.rs   → QuantileLoss      (quantile as field)
+├── api/                          (public traits and value objects; no deps on core/)
+│   ├── loss.rs                   [Loss trait]
+│   │   └── forward(&Tensor, &Tensor) -> MlResult<Tensor>
+│   └── dataset.rs                [Dataset trait]
+│       └── len() / get(i) / input_shape() / target_dim()
 │
-├── pipeline/
-│   ├── dataloader.rs → DataLoader        (next_batch(); no Iterator impl)
-│   └── scaler.rs     → Scaler, ScalerType (MinMax | Standard)
-│
-└── runner/
-    ├── trainer.rs    → Trainer           (owns model + optimizer; train loop)
-    ├── metrics.rs    → Metrics           (MAE, MSE, RMSE accumulator)
-    └── summary.rs    → model_summary     (prints parameter counts)
-
-checkpoint/
-└── mod.rs            → Checkpoint, SavedParam, save_checkpoint, load_checkpoint
+└── core/                         (implementations; not re-exported from lib.rs directly)
+    ├── lossfunction/
+    │   ├── mse_loss.rs  → MSELoss
+    │   ├── mae_loss.rs  → MAELoss
+    │   ├── huber.rs     → HuberLoss         (delta as field)
+    │   ├── cross_entropy.rs → CrossEntropyLoss
+    │   └── quantile.rs  → QuantileLoss      (quantile as field)
+    ├── pipeline/
+    │   ├── dataloader.rs → DataLoader       (implements Iterator)
+    │   └── scaler.rs     → Scaler, ScalerType (MinMax | Standard | Robust)
+    ├── runner/
+    │   ├── trainer.rs   → Trainer           (owns model + optimizer; train loop)
+    │   ├── metrics.rs   → Metrics           (MAE, MSE, RMSE accumulator)
+    │   └── summary.rs   → model_summary     (prints parameter counts)
+    └── checkpoint/
+        └── mod.rs       → Checkpoint, SavedParam, save_checkpoint, load_checkpoint
 ```
 
 ---
 
 ## Layer Responsibilities
 
-| Module | Responsibility |
-|--------|---------------|
-| `lib.rs` | Re-exports the entire ml* public surface; single dependency point for consumers |
-| `loss.rs` | Defines the `Loss` trait — one method, `forward`, returning a differentiable scalar tensor |
-| `dataset.rs` | Defines the `Dataset` trait — provides length, indexed access, shape metadata |
-| `lossfunction/*` | Implements concrete loss functions; stateless except for configuration fields (delta, quantile) |
-| `pipeline/dataloader.rs` | Wraps a `Dataset`, yields batches via `next_batch()`, optionally shuffles index order each epoch |
-| `pipeline/scaler.rs` | Fits normalization statistics on training data; applies forward and inverse transforms |
-| `runner/trainer.rs` | Owns model and optimizer; drives the `zero_grad → forward → loss → backward → step → scheduler` cycle |
-| `runner/metrics.rs` | Accumulates per-batch predictions and targets; computes epoch-level regression metrics |
-| `runner/summary.rs` | Walks `Layer::parameters()` and prints a human-readable parameter count table |
-| `checkpoint/mod.rs` | Serializes `SavedParam` (name + flat `Vec<f32>`) to disk; deserializes and restores into a model |
+| Layer | Module | Responsibility |
+|-------|--------|---------------|
+| facade | `lib.rs` | Declares `api` and `core` as private; re-exports `saf::*` to form the public surface |
+| saf | `saf/mod.rs` | Sole public re-export surface; exposes mltraining types and the full mlautograd/mllayers/mloptim surface |
+| api | `api/loss.rs` | Defines the `Loss` trait — one method, `forward`, returning a differentiable scalar tensor; no deps on `core/` |
+| api | `api/dataset.rs` | Defines the `Dataset` trait — provides length, indexed access, shape metadata; no deps on `core/` |
+| core | `core/lossfunction/*` | Implements concrete loss functions; stateless except for configuration fields (delta, quantile) |
+| core | `core/pipeline/dataloader.rs` | Wraps a `Dataset`, implements `Iterator` to yield batches, optionally shuffles index order each epoch |
+| core | `core/pipeline/scaler.rs` | Fits normalization statistics on training data; applies forward and inverse transforms |
+| core | `core/runner/trainer.rs` | Owns model and optimizer; drives the `zero_grad → forward → loss → backward → step → scheduler` cycle |
+| core | `core/runner/metrics.rs` | Accumulates per-batch predictions and targets; computes epoch-level regression metrics |
+| core | `core/runner/summary.rs` | Walks `Layer::parameters()` and prints a human-readable parameter count table |
+| core | `core/checkpoint/mod.rs` | Serializes `SavedParam` (flat `Vec<f32>` + shape) to disk; deserializes and restores into a model |
 
 ---
 
@@ -171,6 +180,23 @@ flowchart TD
 5. **`Checkpoint` uses `SavedParam` (name + flat `Vec<f32>`)** — the serialization format is human-inspectable and framework-agnostic. It does not depend on any internal tensor representation, so checkpoints remain loadable if internal data structures change.
 
 ---
+
+## Cross-Cutting Concerns
+
+### Security
+- Checkpoint files are deserialized as `Vec<SavedParam>` (name + flat `Vec<f32>`) — no executable code or unsafe deserialization
+- No network I/O — all data movement is in-process or local filesystem
+- Scaler statistics are computed from caller-provided training data; no untrusted external input paths
+
+### Error Handling
+- `Trainer::train` returns `MlResult<()>` — any failure in forward, loss, or backward propagates up and halts training
+- `DataLoader::next_batch` returns `Option<(Tensor, Tensor)>` — epoch end is expressed as `None`, not an error
+- Checkpoint load errors are reported as `MlError` — partial loads are rejected, not silently applied
+
+### Performance
+- `Scaler::fit` runs once on the training split; `transform` is a single pass — no per-batch normalization overhead
+- `DataLoader` shuffles an index vec once per epoch — O(n) shuffle cost, zero copy of underlying data
+- `Trainer` takes ownership of model and optimizer — avoids `Mutex`/`RwLock` overhead during the training loop
 
 ## Integration Points
 

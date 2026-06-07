@@ -1,0 +1,14 @@
+[package]
+name = "mltraining"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+authors = ["sweengineeringlabs <engineers@swelabs.io>"]
+
+[dependencies]
+swe-ml-tensor = { package = "llmtensor", git = "https://github.com/sweengineeringlabs/llmtensor", rev = "3f2fb98" }
+mlautograd = { git = "https://github.com/sweengineeringlabs/mlautograd" }
+mllayers = { git = "https://github.com/sweengineeringlabs/mllayers" }
+mloptim = { git = "https://github.com/sweengineeringlabs/mloptim" }
+rand = "0.8"
+log = "0.4"

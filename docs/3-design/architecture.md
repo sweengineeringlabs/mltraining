@@ -99,6 +99,65 @@ Raw data (arrays / files)
 
 ---
 
+## Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant SC as Scaler
+    participant DL as DataLoader
+    participant TR as Trainer
+    participant M as Model (Layer)
+    participant L as Loss
+    participant TP as tape (mlautograd)
+    participant O as Optimizer
+    participant S as LRScheduler
+    participant CP as Checkpoint
+
+    U->>SC: fit(train_data)
+    SC-->>U: fitted Scaler
+    U->>SC: transform(train_data)
+    SC-->>U: normalized features
+
+    U->>TR: train(epochs)
+
+    loop each epoch
+        loop each batch
+            TR->>DL: next_batch()
+            DL-->>TR: (inputs: Tensor[batch,seq,feat], targets: Tensor[batch,out])
+            TR->>O: zero_grad(params)
+            TR->>M: forward(&inputs)
+            M-->>TR: pred: Tensor[batch,out]
+            TR->>L: forward(&pred, &targets)
+            L-->>TR: loss: Tensor (scalar)
+            TR->>TP: tape::backward(&loss)
+            TP-->>TR: grads populated on params
+            TR->>O: step(params)
+            TR->>S: step(&mut opt)
+        end
+        TR->>CP: save_checkpoint(model, path)
+    end
+    TR-->>U: trained model
+```
+
+## Dataflow Diagram
+
+```mermaid
+flowchart TD
+    A["Raw Data<br/>Vec&lt;f32&gt; features"] --> B["Scaler::fit + transform<br/>IN: raw features<br/>OUT: normalized Vec&lt;f32&gt;"]
+    B --> C["Dataset (impl Dataset trait)<br/>len() / get(i) → (Tensor, Tensor)"]
+    C --> D["DataLoader::next_batch()<br/>IN: batch_size: usize, shuffle: bool<br/>OUT: (inputs: Tensor[batch,…], targets: Tensor[batch,out])"]
+    D --> E["Model::forward<br/>IN: inputs: Tensor[batch,seq,feat]<br/>OUT: pred: Tensor[batch,out]"]
+    E --> F["Loss::forward<br/>IN: pred: Tensor[batch,out]<br/>IN: targets: Tensor[batch,out]<br/>OUT: loss: Tensor (scalar)"]
+    F --> G["tape::backward<br/>IN: loss: &Tensor<br/>OUT: grads on all requires_grad params"]
+    G --> H["Optimizer::step<br/>IN: params: Vec&lt;&mut Tensor&gt;<br/>OUT: params updated in-place"]
+    H --> I["Metrics::update<br/>IN: pred, targets<br/>OUT: running MAE/MSE/RMSE"]
+    I --> J["Checkpoint::save<br/>IN: model params as Vec&lt;SavedParam&gt;<br/>OUT: .ckpt file on disk"]
+    J --> K["Next Epoch"]
+```
+
+---
+
 ## Design Decisions
 
 1. **`mltraining` is the umbrella crate** — downstream consumers depend on only one crate. All ml* public types are available via `use mltraining::*`, eliminating the need to manage separate version pins for mlautograd, mllayers, and mloptim.

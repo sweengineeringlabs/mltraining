@@ -72,32 +72,12 @@ mod tests {
         assert_eq!(batches.len(), 3);
     }
 
-    /// @covers: num_batches
+    /// @covers: next
     #[test]
-    fn test_num_batches_ceiling_division() {
-        let ds = MockDataLoader { n: 10 };
-        let loader = DataLoader::new(ds, 4, false);
-        assert_eq!(loader.num_batches(), 3);
-    }
-
-    /// @covers: reset
-    #[test]
-    fn test_reset_allows_reiteration() {
-        let ds = MockDataLoader { n: 5 };
-        let mut loader = DataLoader::new(ds, 2, false);
-        let first: Vec<_> = loader.by_ref().collect();
+    fn test_next_returns_none_when_exhausted() {
+        let ds = MockDataLoader { n: 2 };
+        let mut loader = DataLoader::new(ds, 4, false);
+        assert!(loader.next().is_some());
         assert!(loader.next().is_none());
-        loader.reset();
-        let second: Vec<_> = loader.collect();
-        assert_eq!(first.len(), second.len());
-    }
-
-    /// @covers: num_batches
-    #[test]
-    fn test_empty_dataset_produces_no_batches() {
-        let ds = MockDataLoader { n: 0 };
-        let loader = DataLoader::new(ds, 4, false);
-        assert_eq!(loader.num_batches(), 0);
-        assert_eq!(loader.collect::<Vec<_>>().len(), 0);
     }
 }

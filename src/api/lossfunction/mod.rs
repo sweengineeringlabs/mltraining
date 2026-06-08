@@ -1,10 +1,10 @@
 #![allow(unused_imports)]
 
-pub mod cross_entropy;
-pub mod huber;
-pub mod mae_backward;
-pub mod mse_backward;
-pub mod quantile;
+pub mod cross_entropy_loss;
+pub mod huber_loss;
+pub mod m_a_e_loss;
+pub mod m_s_e_loss;
+pub mod quantile_loss;
 
 pub use crate::api::traits::loss::Loss;
 pub use crate::api::types::cross_entropy_loss::CrossEntropyLoss;

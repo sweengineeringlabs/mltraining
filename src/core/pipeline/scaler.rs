@@ -28,7 +28,7 @@ impl ScaleTransform for Scaler {
 mod tests {
     use super::*;
 
-    /// @covers: fit
+    /// @covers: transform
     #[test]
     fn test_minmax_fit_transform() {
         let data = vec![vec![0.0, 10.0, 20.0, 30.0, 40.0]];
@@ -51,7 +51,7 @@ mod tests {
         }
     }
 
-    /// @covers: fit
+    /// @covers: transform
     #[test]
     fn test_standard_fit_transform() {
         let data = vec![vec![1.0, 2.0, 3.0, 4.0, 5.0]];
@@ -64,7 +64,7 @@ mod tests {
         assert!((var.sqrt() - 1.0).abs() < 1e-5);
     }
 
-    /// @covers: fit
+    /// @covers: transform
     #[test]
     fn test_constant_column_handling() {
         let data = vec![vec![5.0, 5.0, 5.0, 5.0]];

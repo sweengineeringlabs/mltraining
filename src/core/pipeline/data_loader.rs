@@ -1,41 +1,6 @@
 use mlautograd::Tensor;
-use crate::api::dataset::Dataset;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
-
-/// An iterator that yields batched `(input, target)` tensor pairs.
-pub struct DataLoader<D: Dataset> {
-    dataset: D,
-    batch_size: usize,
-    shuffle: bool,
-    indices: Vec<usize>,
-    current_idx: usize,
-}
-
-impl<D: Dataset> DataLoader<D> {
-    pub fn new(dataset: D, batch_size: usize, shuffle: bool) -> Self {
-        let mut indices: Vec<usize> = (0..dataset.len()).collect();
-        if shuffle {
-            let mut rng = thread_rng();
-            indices.shuffle(&mut rng);
-        }
-        Self { dataset, batch_size, shuffle, indices, current_idx: 0 }
-    }
-
-    pub fn reset(&mut self) {
-        self.current_idx = 0;
-        if self.shuffle {
-            let mut rng = thread_rng();
-            self.indices.shuffle(&mut rng);
-        }
-    }
-
-    pub fn num_batches(&self) -> usize {
-        let len = self.indices.len();
-        if len == 0 { return 0; }
-        (len + self.batch_size - 1) / self.batch_size
-    }
-}
+use crate::api::traits::dataset::Dataset;
+use crate::api::types::data_loader::DataLoader;
 
 impl<D: Dataset> Iterator for DataLoader<D> {
     type Item = (Tensor, Tensor);
@@ -81,39 +46,44 @@ impl<D: Dataset> Iterator for DataLoader<D> {
 mod tests {
     use super::*;
     use mlautograd::{MlResult, Tensor};
-    use crate::api::dataset::Dataset;
+    use crate::api::traits::dataset::Dataset;
 
-    struct MockDataset { n: usize }
+    struct MockDataLoader { n: usize }
 
-    impl Dataset for MockDataset {
+    impl Dataset for MockDataLoader {
         fn len(&self) -> usize { self.n }
         fn get(&self, idx: usize) -> MlResult<(Tensor, Tensor)> {
-            let input = Tensor::from_vec(vec![idx as f32; 3], vec![3]).unwrap();
-            let target = Tensor::from_vec(vec![idx as f32], vec![1]).unwrap();
+            let input = Tensor::from_vec(vec![idx as f32; 3], vec![3])
+                .expect("mock input");
+            let target = Tensor::from_vec(vec![idx as f32], vec![1])
+                .expect("mock target");
             Ok((input, target))
         }
         fn input_shape(&self) -> Vec<usize> { vec![3] }
         fn target_dim(&self) -> usize { 1 }
     }
 
+    /// @covers: next
     #[test]
     fn test_dataloader_iterates_all_samples() {
-        let ds = MockDataset { n: 10 };
+        let ds = MockDataLoader { n: 10 };
         let loader = DataLoader::new(ds, 4, false);
         let batches: Vec<_> = loader.collect();
         assert_eq!(batches.len(), 3);
     }
 
+    /// @covers: num_batches
     #[test]
     fn test_num_batches_ceiling_division() {
-        let ds = MockDataset { n: 10 };
+        let ds = MockDataLoader { n: 10 };
         let loader = DataLoader::new(ds, 4, false);
         assert_eq!(loader.num_batches(), 3);
     }
 
+    /// @covers: reset
     #[test]
     fn test_reset_allows_reiteration() {
-        let ds = MockDataset { n: 5 };
+        let ds = MockDataLoader { n: 5 };
         let mut loader = DataLoader::new(ds, 2, false);
         let first: Vec<_> = loader.by_ref().collect();
         assert!(loader.next().is_none());
@@ -122,9 +92,10 @@ mod tests {
         assert_eq!(first.len(), second.len());
     }
 
+    /// @covers: num_batches
     #[test]
     fn test_empty_dataset_produces_no_batches() {
-        let ds = MockDataset { n: 0 };
+        let ds = MockDataLoader { n: 0 };
         let loader = DataLoader::new(ds, 4, false);
         assert_eq!(loader.num_batches(), 0);
         assert_eq!(loader.collect::<Vec<_>>().len(), 0);

@@ -1,17 +1,33 @@
-// mltraining own types
-pub use crate::api::loss::Loss;
-pub use crate::api::dataset::Dataset;
-pub use crate::core::lossfunction::mse_loss::MSELoss;
-pub use crate::core::lossfunction::mae_loss::MAELoss;
-pub use crate::core::lossfunction::huber::HuberLoss;
-pub use crate::core::lossfunction::cross_entropy::CrossEntropyLoss;
-pub use crate::core::lossfunction::quantile::QuantileLoss;
-pub use crate::core::pipeline::dataloader::DataLoader;
-pub use crate::core::pipeline::scaler::{Scaler, ScalerType};
-pub use crate::core::runner::trainer::Trainer;
-pub use crate::core::runner::metrics::Metrics;
-pub use crate::core::runner::summary::model_summary;
-pub use crate::core::checkpoint::{Checkpoint, SavedParam, save_checkpoint, load_checkpoint};
+// mltraining public API
+// saf/ re-exports from api/ only; free-fn wrappers are defined in saf/functions.rs.
+mod mltraining_svc;
+
+// Types
+pub use crate::api::types::checkpoint::Checkpoint;
+pub use crate::api::types::saved_param::SavedParam;
+pub use crate::api::types::cross_entropy_loss::CrossEntropyLoss;
+pub use crate::api::types::huber_loss::HuberLoss;
+pub use crate::api::types::m_a_e_loss::MAELoss;
+pub use crate::api::types::m_s_e_loss::MSELoss;
+pub use crate::api::types::quantile_loss::QuantileLoss;
+pub use crate::api::types::data_loader::DataLoader;
+pub use crate::api::types::scaler::Scaler;
+pub use crate::api::types::scaler_type::ScalerType;
+pub use crate::api::types::trainer::Trainer;
+pub use crate::api::types::metrics::Metrics;
+pub use crate::api::types::model_summary::ModelSummary;
+
+// Traits — re-exported via domain api/ submodules.
+pub use crate::api::lossfunction::Loss;
+pub use crate::api::pipeline::Dataset;
+pub use crate::api::checkpoint::CheckpointOps;
+pub use crate::api::runner::MetricsOps;
+pub use crate::api::runner::TrainerOps;
+pub use crate::api::runner::Validator;
+pub use crate::api::pipeline::ScaleTransform;
+
+// Convenience free functions (re-exported from saf/functions.rs).
+pub use mltraining_svc::{save_checkpoint, load_checkpoint, model_summary};
 
 // umbrella re-exports (mltraining is the single entry point for the ml* stack)
 pub use mlautograd::{MlError, MlResult, Tensor, TensorId, pool, tape};

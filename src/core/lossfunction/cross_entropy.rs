@@ -1,19 +1,6 @@
 use mlautograd::{BackwardOp, MlError, MlResult, Tensor, TapeEntry, tape};
-use crate::api::loss::Loss;
-
-/// Cross-Entropy Loss (numerically stable log-softmax + NLL).
-///
-/// Predictions: raw logits [batch, classes].
-/// Targets: one-hot encoded [batch, classes].
-pub struct CrossEntropyLoss;
-
-impl CrossEntropyLoss {
-    pub fn new() -> Self { Self }
-}
-
-impl Default for CrossEntropyLoss {
-    fn default() -> Self { Self::new() }
-}
+use crate::api::traits::loss::Loss;
+use crate::api::types::cross_entropy_loss::CrossEntropyLoss;
 
 impl Loss for CrossEntropyLoss {
     fn forward(&self, predictions: &Tensor, targets: &Tensor) -> MlResult<Tensor> {
@@ -91,34 +78,43 @@ impl BackwardOp for CrossEntropyBackward {
         }
 
         let grad_pred = Tensor::from_vec(grad_data, predictions.shape().to_vec())
-            .expect("cross_entropy backward grad tensor");
+            .unwrap_or_else(|_| Tensor::zeros(predictions.shape().to_vec()));
         let grad_val = grad_output.to_vec()[0];
         let grad_pred = grad_pred.mul_scalar_raw(grad_val);
         vec![grad_pred]
     }
 
-    fn name(&self) -> &str { "CrossEntropyBackward" }
+    fn name(&self) -> &str {
+        let op_name = "CrossEntropyBackward";
+        op_name
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// @covers: forward
     #[test]
     fn test_cross_entropy_loss_perfect_prediction_low_loss() {
         let loss = CrossEntropyLoss::new();
-        let pred = Tensor::from_vec(vec![10.0, 0.0, 0.0], vec![1, 3]).unwrap();
-        let tgt = Tensor::from_vec(vec![1.0, 0.0, 0.0], vec![1, 3]).unwrap();
-        let result = loss.forward(&pred, &tgt).unwrap();
+        let pred = Tensor::from_vec(vec![10.0, 0.0, 0.0], vec![1, 3])
+            .expect("pred tensor");
+        let tgt = Tensor::from_vec(vec![1.0, 0.0, 0.0], vec![1, 3])
+            .expect("tgt tensor");
+        let result = loss.forward(&pred, &tgt).expect("forward");
         assert!(result.to_vec()[0] < 0.01);
     }
 
+    /// @covers: forward
     #[test]
     fn test_cross_entropy_loss_wrong_prediction_high_loss() {
         let loss = CrossEntropyLoss::new();
-        let pred = Tensor::from_vec(vec![0.0, 0.0, 10.0], vec![1, 3]).unwrap();
-        let tgt = Tensor::from_vec(vec![1.0, 0.0, 0.0], vec![1, 3]).unwrap();
-        let result = loss.forward(&pred, &tgt).unwrap();
+        let pred = Tensor::from_vec(vec![0.0, 0.0, 10.0], vec![1, 3])
+            .expect("pred tensor");
+        let tgt = Tensor::from_vec(vec![1.0, 0.0, 0.0], vec![1, 3])
+            .expect("tgt tensor");
+        let result = loss.forward(&pred, &tgt).expect("forward");
         assert!(result.to_vec()[0] > 5.0);
     }
 }

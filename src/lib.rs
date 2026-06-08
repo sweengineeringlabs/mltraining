@@ -1,5 +1,6 @@
 mod api;
 mod core;
-pub mod saf;
+pub(crate) mod saf;
+mod gateway;
 
-pub use saf::*;
+pub use gateway::*;

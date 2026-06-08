@@ -1,2 +1,2 @@
-pub mod dataloader;
+pub mod data_loader;
 pub mod scaler;

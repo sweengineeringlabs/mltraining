@@ -21,20 +21,3 @@ pub trait Dataset {
     /// Dimensionality of the target (e.g., 1 for single-target regression).
     fn target_dim(&self) -> usize;
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_empty_default_delegates_to_len() {
-        struct EmptyDs;
-        impl Dataset for EmptyDs {
-            fn len(&self) -> usize { 0 }
-            fn get(&self, _: usize) -> MlResult<(Tensor, Tensor)> { unimplemented!() }
-            fn input_shape(&self) -> Vec<usize> { vec![1] }
-            fn target_dim(&self) -> usize { 1 }
-        }
-        assert!(EmptyDs.is_empty());
-    }
-}

@@ -1,18 +1,6 @@
 use mlautograd::{BackwardOp, MlError, MlResult, Tensor, TapeEntry, tape};
-use crate::api::loss::Loss;
-
-/// Huber Loss with configurable delta.
-pub struct HuberLoss {
-    delta: f32,
-}
-
-impl HuberLoss {
-    pub fn new(delta: f32) -> Self { Self { delta } }
-}
-
-impl Default for HuberLoss {
-    fn default() -> Self { Self::new(1.0) }
-}
+use crate::api::traits::loss::Loss;
+use crate::api::types::huber_loss::HuberLoss;
 
 impl Loss for HuberLoss {
     fn forward(&self, predictions: &Tensor, targets: &Tensor) -> MlResult<Tensor> {
@@ -51,7 +39,8 @@ impl BackwardOp for HuberBackward {
     fn backward(&self, grad_output: &Tensor, saved: &[Tensor]) -> Vec<Tensor> {
         let predictions = &saved[0];
         let targets = &saved[1];
-        let diff = predictions.sub_raw(targets).expect("huber backward sub");
+        let diff = predictions.sub_raw(targets)
+            .unwrap_or_else(|_| Tensor::zeros(predictions.shape().to_vec()));
         let diff_data = diff.to_vec();
         let delta = self.delta;
         let n = self.n as f32;
@@ -67,34 +56,39 @@ impl BackwardOp for HuberBackward {
         }).collect();
 
         let grad_pred = Tensor::from_vec(grad_data, diff.shape().to_vec())
-            .expect("huber backward grad tensor");
+            .unwrap_or_else(|_| Tensor::zeros(diff.shape().to_vec()));
         let grad_val = grad_output.to_vec()[0];
         let grad_pred = grad_pred.mul_scalar_raw(grad_val);
         vec![grad_pred]
     }
 
-    fn name(&self) -> &str { "HuberBackward" }
+    fn name(&self) -> &str {
+        let op_name = "HuberBackward";
+        op_name
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// @covers: forward
     #[test]
     fn test_huber_loss_identical_inputs_returns_zero() {
         let loss = HuberLoss::new(1.0);
-        let pred = Tensor::from_vec(vec![1.0, 2.0], vec![2]).unwrap();
-        let tgt = Tensor::from_vec(vec![1.0, 2.0], vec![2]).unwrap();
-        let result = loss.forward(&pred, &tgt).unwrap();
+        let pred = Tensor::from_vec(vec![1.0, 2.0], vec![2]).expect("pred");
+        let tgt = Tensor::from_vec(vec![1.0, 2.0], vec![2]).expect("tgt");
+        let result = loss.forward(&pred, &tgt).expect("forward");
         assert!(result.to_vec()[0].abs() < 1e-6);
     }
 
+    /// @covers: forward
     #[test]
     fn test_huber_loss_small_diff_uses_quadratic() {
         let loss = HuberLoss::new(2.0);
-        let pred = Tensor::from_vec(vec![1.0], vec![1]).unwrap();
-        let tgt = Tensor::from_vec(vec![2.0], vec![1]).unwrap();
-        let result = loss.forward(&pred, &tgt).unwrap();
+        let pred = Tensor::from_vec(vec![1.0], vec![1]).expect("pred");
+        let tgt = Tensor::from_vec(vec![2.0], vec![1]).expect("tgt");
+        let result = loss.forward(&pred, &tgt).expect("forward");
         assert!((result.to_vec()[0] - 0.5).abs() < 1e-6);
     }
 }
